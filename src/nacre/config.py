@@ -16,7 +16,7 @@ class LayerSettings(pydantic.BaseModel):
     name: pydantic.StrictStr | None = None
 
 
-class BranchMaterializerSettings(pydantic_settings.BaseSettings):
+class NacreSettings(pydantic_settings.BaseSettings):
     model_config = pydantic_settings.SettingsConfigDict(extra="forbid", frozen=True)
 
     repo: pathlib.Path
@@ -49,6 +49,6 @@ def resolve_repo_path(config_path: pathlib.Path, data: dict[str, Any]) -> None:
     data["repo"] = repo_path.resolve()
 
 
-def load_settings(config_path: pathlib.Path) -> BranchMaterializerSettings:
+def load_settings(config_path: pathlib.Path) -> NacreSettings:
     resolved_path = config_path.resolve()
-    return BranchMaterializerSettings.model_validate(load_config_data(resolved_path))
+    return NacreSettings.model_validate(load_config_data(resolved_path))

@@ -3,11 +3,11 @@
 import pathlib
 import tempfile
 
-import branch_materializer.config as config_module
-import branch_materializer.git_ops as git_ops
+import nacre.config as config_module
+import nacre.git_ops as git_ops
 
 
-def materialize_branch(settings: config_module.BranchMaterializerSettings) -> None:
+def materialize_branch(settings: config_module.NacreSettings) -> None:
     git_ops.ensure_git_repo(settings.repo)
     fetch_remotes(settings.repo, settings.fetch)
     checked_out_worktree = prepare_target_branch(settings.repo, settings.target_branch)
@@ -34,7 +34,7 @@ def prepare_target_branch(repo: pathlib.Path, target_branch: str) -> pathlib.Pat
 
 
 def build_materialized_branch(
-    settings: config_module.BranchMaterializerSettings,
+    settings: config_module.NacreSettings,
 ) -> str:
     with tempfile.TemporaryDirectory(prefix="materialize-branch-") as temp_dir:
         temp_path = pathlib.Path(temp_dir)
@@ -67,7 +67,7 @@ def update_target_branch(
 
 
 def apply_layers(
-    settings: config_module.BranchMaterializerSettings,
+    settings: config_module.NacreSettings,
     temp_path: pathlib.Path,
 ) -> None:
     previous_head = settings.base_ref

@@ -1,5 +1,5 @@
 [project]
-name = "branch-materializer"
+name = "nacre"
 version = "0.1.0"
 description = "Materialize Git branches from declarative layered specs"
 requires-python = ">=3.12"
@@ -10,14 +10,14 @@ dependencies = [
 ]
 
 [project.scripts]
-branch-materializer = "branch_materializer.cli:main"
+nacre = "nacre.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/branch_materializer"]
+packages = ["src/nacre"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

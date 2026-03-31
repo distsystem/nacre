@@ -1,17 +1,17 @@
-# branch-materializer
+# nacre
 
 Materialize a Git branch from a declarative YAML config.
 
 ## Usage
 
 ```bash
-pixi run env PYTHONPATH=src python -m branch_materializer.cli /path/to/config.yaml
+pixi run env PYTHONPATH=src python -m nacre.cli /path/to/config.yaml
 ```
 
 or after installation:
 
 ```bash
-branch-materializer /path/to/config.yaml
+nacre /path/to/config.yaml
 ```
 
 ## Config

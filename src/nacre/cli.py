@@ -3,8 +3,8 @@
 import argparse
 import pathlib
 
-import branch_materializer.config as config_module
-import branch_materializer.materialize as materialize_module
+import nacre.config as config_module
+import nacre.materialize as materialize_module
 
 
 def parse_args() -> argparse.Namespace:
