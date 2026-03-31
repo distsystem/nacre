@@ -3,22 +3,22 @@
 import argparse
 import pathlib
 
-from branch_materializer.config import load_spec
-from branch_materializer.materialize import materialize_branch
+import branch_materializer.config as config_module
+import branch_materializer.materialize as materialize_module
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Build a branch from a base ref plus ordered layers."
     )
-    parser.add_argument("config", type=pathlib.Path, help="Path to TOML config")
+    parser.add_argument("config", type=pathlib.Path, help="Path to YAML config")
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    spec = load_spec(args.config)
-    materialize_branch(spec)
+    settings = config_module.load_settings(args.config)
+    materialize_module.materialize_branch(settings)
     return 0
 
 

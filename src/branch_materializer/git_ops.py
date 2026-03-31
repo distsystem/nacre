@@ -60,14 +60,25 @@ def ensure_ancestor(repo: pathlib.Path, base: str, head: str) -> None:
         raise RuntimeError(f"layer base {base!r} is not an ancestor of {head!r}")
 
 
-def ensure_non_merge_commit(repo: pathlib.Path, commit: str) -> None:
-    parents = run_git(repo, "rev-list", "--parents", "-n", "1", commit).split()
-    if len(parents) > 2:
-        raise RuntimeError(
-            f"merge commit {commit} is not supported; declare a linear layer instead"
-        )
+def rev_list_linear(repo: pathlib.Path, base: str, head: str) -> list[str]:
+    output = run_git(
+        repo,
+        "rev-list",
+        "--reverse",
+        "--topo-order",
+        "--parents",
+        f"{base}..{head}",
+    )
 
-
-def rev_list(repo: pathlib.Path, base: str, head: str) -> list[str]:
-    output = run_git(repo, "rev-list", "--reverse", "--topo-order", f"{base}..{head}")
-    return [line for line in output.splitlines() if line]
+    commits: list[str] = []
+    for line in output.splitlines():
+        if not line:
+            continue
+        parts = line.split()
+        commit = parts[0]
+        if len(parts) > 2:
+            raise RuntimeError(
+                f"merge commit {commit} is not supported; declare a linear layer instead"
+            )
+        commits.append(commit)
+    return commits

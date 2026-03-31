@@ -1,10 +1,12 @@
+"""Tests for the branch materialization workflow."""
+
 import pathlib
 import subprocess
 
 import pytest
 
-from branch_materializer.config import BranchSpec, LayerSpec
-from branch_materializer.materialize import materialize_branch
+import branch_materializer.config as config_module
+import branch_materializer.materialize as materialize_module
 
 
 def git(cwd: pathlib.Path, *args: str) -> str:
@@ -51,18 +53,18 @@ def test_materialize_branch_replays_layers_in_order(tmp_path):
     local_head = make_commit(repo, "local.txt", "local\n", "local")
     git(repo, "checkout", "main")
 
-    spec = BranchSpec(
+    settings = config_module.BranchMaterializerSettings(
         repo=repo,
         target_branch="dev",
         base_ref="main",
         fetch=[],
         layers=[
-            LayerSpec(head=topic_head, base=base, name="topic"),
-            LayerSpec(head=local_head, base=topic_head, name="local"),
+            config_module.LayerSettings(head=topic_head, base=base, name="topic"),
+            config_module.LayerSettings(head=local_head, base=topic_head, name="local"),
         ],
     )
 
-    materialize_branch(spec)
+    materialize_module.materialize_branch(settings)
 
     history = git(repo, "log", "--format=%s", "dev")
     assert history.splitlines()[:3] == ["local", "topic", "base"]
@@ -76,16 +78,16 @@ def test_materialize_branch_rejects_dirty_checked_out_target(tmp_path):
     git(repo, "checkout", "-b", "dev")
     (repo / "dirty.txt").write_text("dirty\n")
 
-    spec = BranchSpec(
+    settings = config_module.BranchMaterializerSettings(
         repo=repo,
         target_branch="dev",
         base_ref="main",
         fetch=[],
-        layers=[LayerSpec(head=head, base="main")],
+        layers=[config_module.LayerSettings(head=head, base="main")],
     )
 
     with pytest.raises(RuntimeError, match="has uncommitted changes"):
-        materialize_branch(spec)
+        materialize_module.materialize_branch(settings)
 
 
 def test_materialize_branch_rejects_non_ancestor_layer_base(tmp_path):
@@ -95,16 +97,16 @@ def test_materialize_branch_rejects_non_ancestor_layer_base(tmp_path):
     git(repo, "checkout", "main")
     other_head = make_commit(repo, "other.txt", "other\n", "other")
 
-    spec = BranchSpec(
+    settings = config_module.BranchMaterializerSettings(
         repo=repo,
         target_branch="dev",
         base_ref="main",
         fetch=[],
-        layers=[LayerSpec(head=topic_head, base=other_head)],
+        layers=[config_module.LayerSettings(head=topic_head, base=other_head)],
     )
 
     with pytest.raises(RuntimeError, match="is not an ancestor"):
-        materialize_branch(spec)
+        materialize_module.materialize_branch(settings)
 
 
 def test_materialize_branch_rejects_merge_commit_layer(tmp_path):
@@ -120,13 +122,13 @@ def test_materialize_branch_rejects_merge_commit_layer(tmp_path):
     base = git(repo, "merge-base", "main", merge_head)
     git(repo, "checkout", "main")
 
-    spec = BranchSpec(
+    settings = config_module.BranchMaterializerSettings(
         repo=repo,
         target_branch="dev",
         base_ref="main",
         fetch=[],
-        layers=[LayerSpec(head=merge_head, base=base)],
+        layers=[config_module.LayerSettings(head=merge_head, base=base)],
     )
 
     with pytest.raises(RuntimeError, match="merge commit"):
-        materialize_branch(spec)
+        materialize_module.materialize_branch(settings)

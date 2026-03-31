@@ -15,5 +15,10 @@ pip = "*"
 [environments]
 dev = ["dev"]
 
+[pypi-dependencies]
+pydantic = "*"
+pydantic-settings = "*"
+pyyaml = "*"
+
 [feature.dev.tasks]
 test = "PYTHONPATH=src pytest tests/ -v"

@@ -1,66 +1,103 @@
-"""Configuration loading for declarative branch materialization."""
+"""Configuration models and loaders for branch materialization."""
 
-import dataclasses
 import pathlib
-import tomllib
+from typing import Any, ClassVar
+
+import pydantic
+import pydantic_settings
+import yaml
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class LayerSpec:
-    head: str
-    base: str | None = None
-    name: str | None = None
+class LayerSettings(pydantic.BaseModel):
+    model_config = pydantic.ConfigDict(extra="forbid", frozen=True)
+
+    head: pydantic.StrictStr
+    base: pydantic.StrictStr | None = None
+    name: pydantic.StrictStr | None = None
 
 
-@dataclasses.dataclass(frozen=True, slots=True)
-class BranchSpec:
+class YamlFileSettingsSource(pydantic_settings.PydanticBaseSettingsSource):
+    def __init__(
+        self,
+        settings_cls: type[pydantic_settings.BaseSettings],
+        config_path: pathlib.Path,
+    ) -> None:
+        super().__init__(settings_cls)
+        self.config_path = config_path
+        self.data = self.load_data()
+
+    def load_data(self) -> dict[str, Any]:
+        raw_data = yaml.safe_load(self.config_path.read_text(encoding="utf-8"))
+        if raw_data is None:
+            return {}
+        if not isinstance(raw_data, dict):
+            raise TypeError("YAML config must contain a mapping at the top level")
+
+        data = dict(raw_data)
+        self.resolve_repo_path(data)
+        return data
+
+    def resolve_repo_path(self, data: dict[str, Any]) -> None:
+        repo = data.get("repo")
+        if not isinstance(repo, str):
+            return
+
+        repo_path = pathlib.Path(repo).expanduser()
+        if not repo_path.is_absolute():
+            repo_path = self.config_path.parent / repo_path
+        data["repo"] = repo_path.resolve()
+
+    def get_field_value(
+        self,
+        field: Any,
+        field_name: str,
+    ) -> tuple[Any, str, bool]:
+        value = self.data.get(field_name)
+        return value, field_name, False
+
+    def prepare_field_value(
+        self,
+        field_name: str,
+        field: Any,
+        value: Any,
+        value_is_complex: bool,
+    ) -> Any:
+        return value
+
+    def __call__(self) -> dict[str, Any]:
+        return dict(self.data)
+
+
+class BranchMaterializerSettings(pydantic_settings.BaseSettings):
+    model_config = pydantic_settings.SettingsConfigDict(extra="forbid", frozen=True)
+
+    _config_path: ClassVar[pathlib.Path | None] = None
+
     repo: pathlib.Path
-    target_branch: str
-    base_ref: str
-    fetch: list[str]
-    layers: list[LayerSpec]
+    target_branch: pydantic.StrictStr
+    base_ref: pydantic.StrictStr
+    fetch: list[pydantic.StrictStr] = pydantic.Field(default_factory=list)
+    layers: list[LayerSettings] = pydantic.Field(default_factory=list)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[pydantic_settings.BaseSettings],
+        init_settings: pydantic_settings.PydanticBaseSettingsSource,
+        env_settings: pydantic_settings.PydanticBaseSettingsSource,
+        dotenv_settings: pydantic_settings.PydanticBaseSettingsSource,
+        file_secret_settings: pydantic_settings.PydanticBaseSettingsSource,
+    ) -> tuple[pydantic_settings.PydanticBaseSettingsSource, ...]:
+        if cls._config_path is None:
+            return (init_settings,)
+
+        return (init_settings, YamlFileSettingsSource(settings_cls, cls._config_path))
 
 
-def load_spec(config_path: pathlib.Path) -> BranchSpec:
-    data = tomllib.loads(config_path.read_text())
-    repo_value = data.get("repo")
-    target_branch = data.get("target_branch")
-    base_ref = data.get("base_ref")
-    if not isinstance(repo_value, str):
-        raise ValueError("config field 'repo' must be a string")
-    if not isinstance(target_branch, str):
-        raise ValueError("config field 'target_branch' must be a string")
-    if not isinstance(base_ref, str):
-        raise ValueError("config field 'base_ref' must be a string")
+def load_settings(config_path: pathlib.Path) -> BranchMaterializerSettings:
+    resolved_path = config_path.resolve()
 
-    fetch = data.get("fetch", [])
-    if not isinstance(fetch, list) or any(not isinstance(item, str) for item in fetch):
-        raise ValueError("config field 'fetch' must be a list of strings")
+    class FileBackedBranchMaterializerSettings(BranchMaterializerSettings):
+        _config_path = resolved_path
 
-    layers_data = data.get("layer", [])
-    if not isinstance(layers_data, list):
-        raise ValueError("config field 'layer' must be an array of tables")
-
-    layers: list[LayerSpec] = []
-    for index, layer_data in enumerate(layers_data, start=1):
-        if not isinstance(layer_data, dict):
-            raise ValueError(f"layer #{index} must be a table")
-        head = layer_data.get("head")
-        if not isinstance(head, str):
-            raise ValueError(f"layer #{index} field 'head' must be a string")
-        base = layer_data.get("base")
-        name = layer_data.get("name")
-        if base is not None and not isinstance(base, str):
-            raise ValueError(f"layer #{index} field 'base' must be a string")
-        if name is not None and not isinstance(name, str):
-            raise ValueError(f"layer #{index} field 'name' must be a string")
-        layers.append(LayerSpec(head=head, base=base, name=name))
-
-    repo_path = (config_path.parent / repo_value).resolve()
-    return BranchSpec(
-        repo=repo_path,
-        target_branch=target_branch,
-        base_ref=base_ref,
-        fetch=fetch,
-        layers=layers,
-    )
+    return FileBackedBranchMaterializerSettings()
