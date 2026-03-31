@@ -132,3 +132,45 @@ def test_materialize_branch_rejects_merge_commit_layer(tmp_path):
 
     with pytest.raises(RuntimeError, match="merge commit"):
         materialize_module.materialize_branch(settings)
+
+
+def test_materialize_branch_updates_unchecked_target_branch(tmp_path):
+    repo = init_repo(tmp_path)
+    git(repo, "checkout", "-b", "topic")
+    topic_head = make_commit(repo, "topic.txt", "topic\n", "topic")
+    git(repo, "checkout", "main")
+
+    settings = config_module.BranchMaterializerSettings(
+        repo=repo,
+        target_branch="dev",
+        base_ref="main",
+        fetch=[],
+        layers=[config_module.LayerSettings(head=topic_head, base="main")],
+    )
+
+    materialize_module.materialize_branch(settings)
+
+    history = git(repo, "log", "--format=%s", "dev")
+    assert history.splitlines()[:2] == ["topic", "base"]
+    assert git(repo, "branch", "--show-current") == "main"
+
+
+def test_materialize_branch_removes_temporary_worktree_on_failure(tmp_path):
+    repo = init_repo(tmp_path)
+    git(repo, "checkout", "-b", "topic")
+    topic_head = make_commit(repo, "topic.txt", "topic\n", "topic")
+    git(repo, "checkout", "main")
+
+    settings = config_module.BranchMaterializerSettings(
+        repo=repo,
+        target_branch="dev",
+        base_ref="main",
+        fetch=[],
+        layers=[config_module.LayerSettings(head=topic_head, base="not-a-real-ref")],
+    )
+
+    with pytest.raises(RuntimeError, match="is not an ancestor"):
+        materialize_module.materialize_branch(settings)
+
+    worktrees = git(repo, "worktree", "list", "--porcelain")
+    assert "materialize-branch-" not in worktrees

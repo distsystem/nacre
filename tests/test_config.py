@@ -86,3 +86,29 @@ def test_load_settings_rejects_unknown_field(tmp_path):
         error["loc"] == ("unknown",) and error["type"] == "extra_forbidden"
         for error in exc_info.value.errors(include_url=False)
     )
+
+
+def test_load_settings_rejects_empty_yaml(tmp_path):
+    config_path = tmp_path / "branch.yaml"
+    config_path.write_text("", encoding="utf-8")
+
+    with pytest.raises(pydantic.ValidationError) as exc_info:
+        config_module.load_settings(config_path)
+
+    errors = exc_info.value.errors(include_url=False)
+    assert any(error["loc"] == ("repo",) and error["type"] == "missing" for error in errors)
+    assert any(
+        error["loc"] == ("target_branch",) and error["type"] == "missing"
+        for error in errors
+    )
+    assert any(
+        error["loc"] == ("base_ref",) and error["type"] == "missing" for error in errors
+    )
+
+
+def test_load_settings_rejects_non_mapping_yaml(tmp_path):
+    config_path = tmp_path / "branch.yaml"
+    config_path.write_text("- repo: .\n", encoding="utf-8")
+
+    with pytest.raises(TypeError, match="mapping at the top level"):
+        config_module.load_settings(config_path)
