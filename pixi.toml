@@ -1,0 +1,19 @@
+[workspace]
+channels = ["https://repo.prefix.dev/meta-forge", "conda-forge"]
+name = "branch-materializer"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[dependencies]
+python = ">=3.12"
+hatchling = ">=1.0"
+
+[feature.dev.dependencies]
+pytest = ">=8.0"
+pip = "*"
+
+[environments]
+dev = ["dev"]
+
+[feature.dev.tasks]
+test = "PYTHONPATH=src pytest tests/ -v"

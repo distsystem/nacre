@@ -1,0 +1,1 @@
+"""Declarative Git branch materializer."""
