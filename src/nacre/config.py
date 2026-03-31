@@ -3,11 +3,9 @@
 import dataclasses
 import pathlib
 import re
-from typing import Any
 
 import pydantic
 import pydantic_settings
-import yaml
 
 
 @dataclasses.dataclass(frozen=True)
@@ -43,7 +41,12 @@ def parse_remote_ref(value: str) -> RemoteRef:
 
 class NacreSettings(pydantic_settings.BaseSettings):
     model_config = pydantic_settings.SettingsConfigDict(
-        extra="forbid", frozen=True, env_prefix="NACRE_",
+        extra="forbid",
+        frozen=True,
+        env_prefix="NACRE_",
+        cli_parse_args=True,
+        cli_prog_name="nacre",
+        yaml_file="nacre.yaml",
     )
 
     upstream: pydantic.StrictStr
@@ -53,14 +56,13 @@ class NacreSettings(pydantic_settings.BaseSettings):
 
     @classmethod
     def settings_customise_sources(
-        cls,
-        settings_cls,
-        init_settings,
-        env_settings,
-        dotenv_settings,
-        file_secret_settings,
+        cls, settings_cls, init_settings, env_settings, dotenv_settings, file_secret_settings,
     ):
-        return (env_settings, init_settings)
+        return (
+            init_settings,
+            env_settings,
+            pydantic_settings.YamlConfigSettingsSource(settings_cls),
+        )
 
     @pydantic.model_validator(mode="after")
     def _validate_refs(self) -> "NacreSettings":
@@ -77,29 +79,3 @@ class NacreSettings(pydantic_settings.BaseSettings):
                 )
             remotes[ref.remote_name] = ref.url
         return self
-
-
-def load_settings(config_path: pathlib.Path) -> NacreSettings:
-    resolved = config_path.resolve()
-    data = _load_yaml(resolved)
-    _resolve_dir_path(resolved, data)
-    return NacreSettings(**data)
-
-
-def _load_yaml(path: pathlib.Path) -> dict[str, Any]:
-    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if raw is None:
-        return {}
-    if not isinstance(raw, dict):
-        raise TypeError("YAML config must contain a mapping at the top level")
-    return dict(raw)
-
-
-def _resolve_dir_path(config_path: pathlib.Path, data: dict[str, Any]) -> None:
-    dir_val = data.get("dir")
-    if not isinstance(dir_val, str):
-        return
-    dir_path = pathlib.Path(dir_val).expanduser()
-    if not dir_path.is_absolute():
-        dir_path = config_path.parent / dir_path
-    data["dir"] = dir_path.resolve()

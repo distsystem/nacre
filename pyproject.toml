@@ -5,8 +5,7 @@ description = "Materialize Git branches from declarative layered specs"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "PyYAML>=6.0",
+    "pydantic-settings[yaml]>=2.6",
 ]
 
 [project.scripts]

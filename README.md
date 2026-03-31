@@ -4,14 +4,17 @@ Materialize a Git branch from a declarative YAML config.
 
 ## Usage
 
+Place a `nacre.yaml` in your project directory, then run:
+
 ```bash
-pixi run env PYTHONPATH=src python -m nacre.cli /path/to/config.yaml
+nacre
 ```
 
-or after installation:
+Fields can be overridden via CLI args or env vars (`NACRE_` prefix):
 
 ```bash
-nacre /path/to/config.yaml
+nacre --target staging
+NACRE_TARGET=staging nacre
 ```
 
 ## Config

@@ -52,17 +52,17 @@ def test_materialize_layers(tmp_path: pathlib.Path, monkeypatch) -> None:
     git(repo, "remote", "rename", "origin", "upstream-org")
     git(repo, "remote", "add", "contributor", str(fork_bare))
 
-    config = tmp_path / "nacre.yaml"
-    config.write_text(
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "nacre.yaml").write_text(
         f"upstream: upstream-org/testrepo:main\n"
         f"target: dev\n"
-        f"dir: {repo}\n"
+        f"dir: repo\n"
         f"layers:\n"
         f"  - contributor/testrepo:feature\n"
         f"  - contributor/testrepo:patch\n"
     )
 
-    monkeypatch.setattr(sys, "argv", ["nacre", str(config)])
+    monkeypatch.setattr(sys, "argv", ["nacre"])
     nacre.cli.main()
 
     subjects = git(repo, "log", "--format=%s", "dev").splitlines()
