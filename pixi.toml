@@ -6,19 +6,15 @@ version = "0.1.0"
 
 [dependencies]
 python = ">=3.12"
-hatchling = ">=1.0"
 
 [feature.dev.dependencies]
 pytest = ">=8.0"
-pip = "*"
 
 [environments]
 dev = ["dev"]
 
 [pypi-dependencies]
-pydantic = "*"
-pydantic-settings = "*"
-pyyaml = "*"
+nacre = { path = ".", editable = true }
 
 [feature.dev.tasks]
-test = "PYTHONPATH=src pytest tests/ -v"
+test = "pytest tests/ -v"
