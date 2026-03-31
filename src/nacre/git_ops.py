@@ -20,6 +20,13 @@ def run_git(cwd: pathlib.Path, *args: str) -> str:
     return result.stdout.strip()
 
 
+def ensure_remote(repo: pathlib.Path, name: str, url: str) -> None:
+    try:
+        run_git(repo, "remote", "get-url", name)
+    except RuntimeError:
+        run_git(repo, "remote", "add", name, url)
+
+
 def ensure_git_repo(repo: pathlib.Path) -> None:
     try:
         run_git(repo, "rev-parse", "--show-toplevel")

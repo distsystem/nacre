@@ -1,6 +1,8 @@
 """Configuration models and loaders for branch materialization."""
 
+import dataclasses
 import pathlib
+import re
 from typing import Any
 
 import pydantic
@@ -8,22 +10,60 @@ import pydantic_settings
 import yaml
 
 
-class LayerSettings(pydantic.BaseModel):
-    model_config = pydantic.ConfigDict(extra="forbid", frozen=True)
+@dataclasses.dataclass(frozen=True)
+class RemoteRef:
+    owner: str
+    repo: str
+    branch: str
 
-    head: pydantic.StrictStr
-    base: pydantic.StrictStr | None = None
-    name: pydantic.StrictStr | None = None
+    @property
+    def remote_name(self) -> str:
+        return self.owner
+
+    @property
+    def tracking_ref(self) -> str:
+        return f"{self.owner}/{self.branch}"
+
+    @property
+    def url(self) -> str:
+        return f"https://github.com/{self.owner}/{self.repo}.git"
+
+
+_REMOTE_REF_RE = re.compile(r"^([^/:]+)/([^/:]+):(.+)$")
+
+
+def parse_remote_ref(value: str) -> RemoteRef:
+    match = _REMOTE_REF_RE.fullmatch(value)
+    if not match:
+        raise ValueError(
+            f"invalid ref format {value!r}, expected 'owner/repo:branch'"
+        )
+    return RemoteRef(owner=match.group(1), repo=match.group(2), branch=match.group(3))
 
 
 class NacreSettings(pydantic_settings.BaseSettings):
     model_config = pydantic_settings.SettingsConfigDict(extra="forbid", frozen=True)
 
-    repo: pathlib.Path
-    target_branch: pydantic.StrictStr
-    base_ref: pydantic.StrictStr
-    fetch: list[pydantic.StrictStr] = pydantic.Field(default_factory=list)
-    layers: list[LayerSettings] = pydantic.Field(default_factory=list)
+    upstream: pydantic.StrictStr
+    target: pydantic.StrictStr
+    dir: pathlib.Path
+    layers: list[pydantic.StrictStr] = pydantic.Field(default_factory=list)
+
+    @pydantic.model_validator(mode="after")
+    def _validate_refs(self) -> "NacreSettings":
+        all_refs = [parse_remote_ref(self.upstream)]
+        for layer in self.layers:
+            all_refs.append(parse_remote_ref(layer))
+        remotes: dict[str, str] = {}
+        for ref in all_refs:
+            existing = remotes.get(ref.remote_name)
+            if existing is not None and existing != ref.url:
+                raise ValueError(
+                    f"owner {ref.owner!r} maps to different repos: "
+                    f"{existing} vs {ref.url}"
+                )
+            remotes[ref.remote_name] = ref.url
+        return self
 
 
 def load_config_data(config_path: pathlib.Path) -> dict[str, Any]:
@@ -34,19 +74,19 @@ def load_config_data(config_path: pathlib.Path) -> dict[str, Any]:
         raise TypeError("YAML config must contain a mapping at the top level")
 
     data = dict(raw_data)
-    resolve_repo_path(config_path, data)
+    resolve_dir_path(config_path, data)
     return data
 
 
-def resolve_repo_path(config_path: pathlib.Path, data: dict[str, Any]) -> None:
-    repo = data.get("repo")
-    if not isinstance(repo, str):
+def resolve_dir_path(config_path: pathlib.Path, data: dict[str, Any]) -> None:
+    dir_val = data.get("dir")
+    if not isinstance(dir_val, str):
         return
 
-    repo_path = pathlib.Path(repo).expanduser()
-    if not repo_path.is_absolute():
-        repo_path = config_path.parent / repo_path
-    data["repo"] = repo_path.resolve()
+    dir_path = pathlib.Path(dir_val).expanduser()
+    if not dir_path.is_absolute():
+        dir_path = config_path.parent / dir_path
+    data["dir"] = dir_path.resolve()
 
 
 def load_settings(config_path: pathlib.Path) -> NacreSettings:

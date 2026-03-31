@@ -17,19 +17,12 @@ nacre /path/to/config.yaml
 ## Config
 
 ```yaml
-repo: ../python/jupyverse/jupyverse
-target_branch: dev
-base_ref: upstream/main
-fetch:
-  - upstream
-  - origin
+upstream: jupyter-server/jupyverse:main
+target: dev
+dir: ../python/jupyverse/jupyverse
 layers:
-  - name: symlink fix
-    head: origin/fix/federated-extensions-symlink
-    base: upstream/main
-  - name: local patches
-    head: local-patches
-    base: origin/fix/federated-extensions-symlink
+  - my-fork/jupyverse:fix/federated-extensions-symlink
+  - other-person/jupyverse:some-feature
 ```
 
-Layers are replayed in order with `git cherry-pick` onto a temporary worktree created from `base_ref`.
+Each ref uses the `owner/repo:branch` format. Remotes are added and fetched automatically. Layers are cherry-picked in order onto a temporary worktree created from `upstream`.
