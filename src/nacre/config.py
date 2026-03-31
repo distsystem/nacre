@@ -42,12 +42,25 @@ def parse_remote_ref(value: str) -> RemoteRef:
 
 
 class NacreSettings(pydantic_settings.BaseSettings):
-    model_config = pydantic_settings.SettingsConfigDict(extra="forbid", frozen=True)
+    model_config = pydantic_settings.SettingsConfigDict(
+        extra="forbid", frozen=True, env_prefix="NACRE_",
+    )
 
     upstream: pydantic.StrictStr
     target: pydantic.StrictStr
     dir: pathlib.Path
     layers: list[pydantic.StrictStr] = pydantic.Field(default_factory=list)
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        return (env_settings, init_settings)
 
     @pydantic.model_validator(mode="after")
     def _validate_refs(self) -> "NacreSettings":
@@ -66,29 +79,27 @@ class NacreSettings(pydantic_settings.BaseSettings):
         return self
 
 
-def load_config_data(config_path: pathlib.Path) -> dict[str, Any]:
-    raw_data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    if raw_data is None:
+def load_settings(config_path: pathlib.Path) -> NacreSettings:
+    resolved = config_path.resolve()
+    data = _load_yaml(resolved)
+    _resolve_dir_path(resolved, data)
+    return NacreSettings(**data)
+
+
+def _load_yaml(path: pathlib.Path) -> dict[str, Any]:
+    raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if raw is None:
         return {}
-    if not isinstance(raw_data, dict):
+    if not isinstance(raw, dict):
         raise TypeError("YAML config must contain a mapping at the top level")
-
-    data = dict(raw_data)
-    resolve_dir_path(config_path, data)
-    return data
+    return dict(raw)
 
 
-def resolve_dir_path(config_path: pathlib.Path, data: dict[str, Any]) -> None:
+def _resolve_dir_path(config_path: pathlib.Path, data: dict[str, Any]) -> None:
     dir_val = data.get("dir")
     if not isinstance(dir_val, str):
         return
-
     dir_path = pathlib.Path(dir_val).expanduser()
     if not dir_path.is_absolute():
         dir_path = config_path.parent / dir_path
     data["dir"] = dir_path.resolve()
-
-
-def load_settings(config_path: pathlib.Path) -> NacreSettings:
-    resolved_path = config_path.resolve()
-    return NacreSettings.model_validate(load_config_data(resolved_path))
