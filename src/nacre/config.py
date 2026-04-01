@@ -62,10 +62,24 @@ class NacreSettings(pydantic_settings.BaseSettings):
         yaml_file="nacre.yaml",
     )
 
-    upstream: pydantic.StrictStr
-    target: pydantic.StrictStr
-    dir: pathlib.Path = pathlib.Path(".")
-    layers: list[pydantic.StrictStr] = pydantic.Field(default_factory=list)
+    upstream: pydantic.StrictStr = pydantic.Field(
+        description="Upstream repository and branch in 'owner/repo:branch' format",
+        examples=["jupyter-server/jupyverse:main"],
+        pattern=r"^[^/:]+/[^/:]+:.+$",
+    )
+    target: pydantic.StrictStr = pydantic.Field(
+        description="Name of the target branch to materialize",
+        examples=["dev"],
+    )
+    dir: pathlib.Path = pydantic.Field(
+        default=pathlib.Path("."),
+        description="Local repository directory (cloned automatically if absent)",
+    )
+    layers: list[pydantic.StrictStr] = pydantic.Field(
+        default_factory=list,
+        description="Layers to cherry-pick, each as 'owner/repo:branch' or 'base..owner/repo:branch'",
+        examples=[["my-fork/repo:fix-bug", "other/repo:main..other/repo:feature"]],
+    )
 
     @classmethod
     def settings_customise_sources(

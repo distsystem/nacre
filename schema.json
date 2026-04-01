@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "upstream": {
+      "description": "Upstream repository and branch in 'owner/repo:branch' format",
+      "examples": [
+        "jupyter-server/jupyverse:main"
+      ],
+      "pattern": "^[^/:]+/[^/:]+:.+$",
+      "title": "Upstream",
+      "type": "string"
+    },
+    "target": {
+      "description": "Name of the target branch to materialize",
+      "examples": [
+        "dev"
+      ],
+      "title": "Target",
+      "type": "string"
+    },
+    "dir": {
+      "default": ".",
+      "description": "Local repository directory (cloned automatically if absent)",
+      "format": "path",
+      "title": "Dir",
+      "type": "string"
+    },
+    "layers": {
+      "description": "Layers to cherry-pick, each as 'owner/repo:branch' or 'base..owner/repo:branch'",
+      "examples": [
+        [
+          "my-fork/repo:fix-bug",
+          "other/repo:main..other/repo:feature"
+        ]
+      ],
+      "items": {
+        "type": "string"
+      },
+      "title": "Layers",
+      "type": "array"
+    }
+  },
+  "required": [
+    "upstream",
+    "target"
+  ],
+  "title": "NacreSettings",
+  "type": "object"
+}

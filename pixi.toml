@@ -34,3 +34,4 @@ nacre = { path = "." }
 
 [tasks]
 test = "pytest tests/ -v"
+schema = "python -c \"from nacre.config import NacreSettings; import json, pathlib; pathlib.Path('schema.json').write_text(json.dumps(NacreSettings.model_json_schema(), indent=2) + '\\n')\""
