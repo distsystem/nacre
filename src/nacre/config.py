@@ -39,6 +39,19 @@ def parse_remote_ref(value: str) -> RemoteRef:
     return RemoteRef(owner=match.group(1), repo=match.group(2), branch=match.group(3))
 
 
+@dataclasses.dataclass(frozen=True)
+class LayerSpec:
+    head: RemoteRef
+    base: RemoteRef | None = None
+
+
+def parse_layer(value: str) -> LayerSpec:
+    if ".." in value:
+        base_str, head_str = value.split("..", 1)
+        return LayerSpec(head=parse_remote_ref(head_str), base=parse_remote_ref(base_str))
+    return LayerSpec(head=parse_remote_ref(value))
+
+
 class NacreSettings(pydantic_settings.BaseSettings):
     model_config = pydantic_settings.SettingsConfigDict(
         extra="forbid",
@@ -51,7 +64,7 @@ class NacreSettings(pydantic_settings.BaseSettings):
 
     upstream: pydantic.StrictStr
     target: pydantic.StrictStr
-    dir: pathlib.Path
+    dir: pathlib.Path = pathlib.Path(".")
     layers: list[pydantic.StrictStr] = pydantic.Field(default_factory=list)
 
     @classmethod
@@ -67,8 +80,11 @@ class NacreSettings(pydantic_settings.BaseSettings):
     @pydantic.model_validator(mode="after")
     def _validate_refs(self) -> "NacreSettings":
         all_refs = [parse_remote_ref(self.upstream)]
-        for layer in self.layers:
-            all_refs.append(parse_remote_ref(layer))
+        for layer_str in self.layers:
+            spec = parse_layer(layer_str)
+            all_refs.append(spec.head)
+            if spec.base is not None:
+                all_refs.append(spec.base)
         remotes: dict[str, str] = {}
         for ref in all_refs:
             existing = remotes.get(ref.remote_name)

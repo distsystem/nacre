@@ -2,7 +2,8 @@
 
 import pathlib
 import subprocess
-import tempfile
+
+import tqdm
 
 import nacre.config as config_module
 
@@ -23,11 +24,16 @@ def _run_git(cwd: pathlib.Path, *args: str) -> str:
     return result.stdout.strip()
 
 
-def _ensure_git_repo(repo: pathlib.Path) -> None:
-    try:
-        _run_git(repo, "rev-parse", "--show-toplevel")
-    except RuntimeError as exc:
-        raise ValueError(f"not a git repository: {repo}") from exc
+def _ensure_git_repo(repo: pathlib.Path, upstream: "config_module.RemoteRef") -> None:
+    if repo.exists() and any(repo.iterdir()):
+        try:
+            _run_git(repo, "rev-parse", "--show-toplevel")
+        except RuntimeError as exc:
+            raise ValueError(f"not a git repository: {repo}") from exc
+        return
+    print(f"Cloning {upstream.url} into {repo}")
+    repo.parent.mkdir(parents=True, exist_ok=True)
+    _run_git(repo.parent, "clone", "-o", upstream.remote_name, upstream.url, str(repo.resolve()))
 
 
 def _ensure_remote(repo: pathlib.Path, name: str, url: str) -> None:
@@ -35,27 +41,6 @@ def _ensure_remote(repo: pathlib.Path, name: str, url: str) -> None:
         _run_git(repo, "remote", "get-url", name)
     except RuntimeError:
         _run_git(repo, "remote", "add", name, url)
-
-
-def _worktree_for_branch(repo: pathlib.Path, branch: str) -> pathlib.Path | None:
-    branch_ref = f"refs/heads/{branch}"
-    output = _run_git(repo, "worktree", "list", "--porcelain")
-    current_worktree: pathlib.Path | None = None
-    for line in output.splitlines():
-        if line.startswith("worktree "):
-            current_worktree = pathlib.Path(line.removeprefix("worktree "))
-            continue
-        if line.startswith("branch ") and line.removeprefix("branch ") == branch_ref:
-            return current_worktree
-    return None
-
-
-def _ensure_clean_worktree(worktree: pathlib.Path) -> None:
-    status = _run_git(worktree, "status", "--short")
-    if status:
-        raise RuntimeError(
-            f"target branch is checked out in {worktree} and has uncommitted changes"
-        )
 
 
 def _ensure_ancestor(repo: pathlib.Path, base: str, head: str) -> None:
@@ -97,18 +82,18 @@ def _rev_list_linear(repo: pathlib.Path, base: str, head: str) -> list[str]:
 
 
 def materialize_branch(settings: config_module.NacreSettings) -> None:
-    _ensure_git_repo(settings.dir)
     upstream = config_module.parse_remote_ref(settings.upstream)
-    layer_refs = [config_module.parse_remote_ref(layer) for layer in settings.layers]
-    _ensure_remotes(settings.dir, [upstream, *layer_refs])
-    checked_out_worktree = _prepare_target_branch(settings.dir, settings.target)
-    final_commit = _build_materialized_branch(settings.dir, upstream, layer_refs)
-    _update_target_branch(
-        settings.dir,
-        settings.target,
-        checked_out_worktree,
-        final_commit,
-    )
+    _ensure_git_repo(settings.dir, upstream)
+    layers = [config_module.parse_layer(s) for s in settings.layers]
+    all_refs = [upstream]
+    for spec in layers:
+        all_refs.append(spec.head)
+        if spec.base is not None:
+            all_refs.append(spec.base)
+    _ensure_remotes(settings.dir, all_refs)
+    _setup_local_branches(settings.dir, upstream, layers)
+    _build_target_branch(settings.dir, settings.target, upstream, layers)
+    final_commit = _run_git(settings.dir, "rev-parse", settings.target)
     print(f"Updated {settings.target} -> {final_commit}")
 
 
@@ -122,69 +107,39 @@ def _ensure_remotes(
             continue
         seen.add(ref.remote_name)
         _ensure_remote(repo, ref.remote_name, ref.url)
+        print(f"Fetching {ref.remote_name}")
         _run_git(repo, "fetch", ref.remote_name)
 
 
-def _prepare_target_branch(
-    repo: pathlib.Path,
-    target: str,
-) -> pathlib.Path | None:
-    checked_out_worktree = _worktree_for_branch(repo, target)
-    if checked_out_worktree is not None:
-        _ensure_clean_worktree(checked_out_worktree)
-    return checked_out_worktree
-
-
-def _build_materialized_branch(
+def _setup_local_branches(
     repo: pathlib.Path,
     upstream: config_module.RemoteRef,
-    layer_refs: list[config_module.RemoteRef],
-) -> str:
-    with tempfile.TemporaryDirectory(prefix="materialize-branch-") as temp_dir:
-        temp_path = pathlib.Path(temp_dir)
-        _run_git(
-            repo,
-            "worktree",
-            "add",
-            "--detach",
-            str(temp_path),
-            upstream.tracking_ref,
-        )
-        try:
-            _apply_layers(repo, upstream, layer_refs, temp_path)
-            return _run_git(temp_path, "rev-parse", "HEAD")
-        finally:
-            _run_git(repo, "worktree", "remove", "--force", str(temp_path))
+    layers: list[config_module.LayerSpec],
+) -> None:
+    _run_git(repo, "checkout", "--detach")
+    _run_git(repo, "branch", "-f", upstream.branch, upstream.tracking_ref)
+    for spec in layers:
+        ref = spec.head
+        _run_git(repo, "branch", "-f", ref.branch, ref.tracking_ref)
 
 
-def _update_target_branch(
+def _build_target_branch(
     repo: pathlib.Path,
     target: str,
-    checked_out_worktree: pathlib.Path | None,
-    final_commit: str,
-) -> None:
-    if checked_out_worktree is not None:
-        _run_git(checked_out_worktree, "reset", "--hard", final_commit)
-        return
-    _run_git(repo, "branch", "-f", target, final_commit)
-
-
-def _apply_layers(
-    repo: pathlib.Path,
     upstream: config_module.RemoteRef,
-    layer_refs: list[config_module.RemoteRef],
-    temp_path: pathlib.Path,
+    layers: list[config_module.LayerSpec],
 ) -> None:
-    previous_ref = upstream.tracking_ref
-    for ref in layer_refs:
-        tracking = ref.tracking_ref
-        _ensure_ancestor(repo, previous_ref, tracking)
-        commits = _rev_list_linear(repo, previous_ref, tracking)
+    _run_git(repo, "checkout", "-B", target, upstream.branch)
+    previous_ref = upstream.branch
+    for spec in layers:
+        base_ref = spec.base.tracking_ref if spec.base else previous_ref
+        _ensure_ancestor(repo, base_ref, spec.head.branch)
+        commits = _rev_list_linear(repo, base_ref, spec.head.branch)
         if not commits:
-            previous_ref = tracking
+            previous_ref = spec.head.branch
             continue
+        ref = spec.head
         label = f"{ref.owner}/{ref.repo}:{ref.branch}"
-        print(f"Applying {label}: {len(commits)} commit(s)")
-        for sha in commits:
-            _run_git(temp_path, "cherry-pick", sha)
-        previous_ref = tracking
+        for sha in tqdm.tqdm(commits, desc=label, unit="commit"):
+            _run_git(repo, "cherry-pick", sha)
+        previous_ref = spec.head.branch

@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",
     "pydantic-settings[yaml]>=2.6",
+    "tqdm>=4.0",
 ]
 
 [project.scripts]
