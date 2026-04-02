@@ -3,8 +3,6 @@
 import pathlib
 import subprocess
 
-import tqdm
-
 import nacre.config as config_module
 
 
@@ -41,41 +39,6 @@ def _ensure_remote(repo: pathlib.Path, name: str, url: str) -> None:
         _run_git(repo, "remote", "get-url", name)
     except RuntimeError:
         _run_git(repo, "remote", "add", name, url)
-
-
-def _ensure_ancestor(repo: pathlib.Path, base: str, head: str) -> None:
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", base, head],
-        cwd=repo,
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(f"layer base {base!r} is not an ancestor of {head!r}")
-
-
-def _rev_list_linear(repo: pathlib.Path, base: str, head: str) -> list[str]:
-    output = _run_git(
-        repo,
-        "rev-list",
-        "--reverse",
-        "--topo-order",
-        "--parents",
-        f"{base}..{head}",
-    )
-    commits: list[str] = []
-    for line in output.splitlines():
-        if not line:
-            continue
-        parts = line.split()
-        commit = parts[0]
-        if len(parts) > 2:
-            raise RuntimeError(
-                f"merge commit {commit} is not supported; declare a linear layer instead"
-            )
-        commits.append(commit)
-    return commits
 
 
 # -- materialization workflow --
@@ -130,16 +93,8 @@ def _build_target_branch(
     layers: list[config_module.LayerSpec],
 ) -> None:
     _run_git(repo, "checkout", "-B", target, upstream.branch)
-    previous_ref = upstream.branch
     for spec in layers:
-        base_ref = spec.base.tracking_ref if spec.base else previous_ref
-        _ensure_ancestor(repo, base_ref, spec.head.branch)
-        commits = _rev_list_linear(repo, base_ref, spec.head.branch)
-        if not commits:
-            previous_ref = spec.head.branch
-            continue
         ref = spec.head
         label = f"{ref.owner}/{ref.repo}:{ref.branch}"
-        for sha in tqdm.tqdm(commits, desc=label, unit="commit"):
-            _run_git(repo, "cherry-pick", sha)
-        previous_ref = spec.head.branch
+        print(f"Merging {label}")
+        _run_git(repo, "merge", "--no-ff", "-m", f"Merge layer {label}", ref.branch)
