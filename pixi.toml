@@ -3,11 +3,11 @@ channels = ["https://repo.prefix.dev/meta-forge", "conda-forge"]
 name = "nacre"
 platforms = ["linux-64"]
 preview = ["pixi-build"]
-version = "0.1.0" # x-release-please-version
+version = "0.2.0" # x-release-please-version
 
 [package]
 name = "nacre"
-version = "0.1.0" # x-release-please-version
+version = "0.2.0" # x-release-please-version
 
 [package.build]
 backend = { name = "pixi-build-python", version = "*" }

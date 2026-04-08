@@ -268,7 +268,7 @@ packages:
   timestamp: 1774072609062
 - conda: .
   name: nacre
-  version: 0.1.0
+  version: 0.2.0
   build: pyh4616a5c_0
   subdir: noarch
   variants:
