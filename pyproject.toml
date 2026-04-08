@@ -1,7 +1,7 @@
 [project]
 name = "nacre"
 version = "0.1.0"
-description = "Materialize Git branches from declarative layered specs"
+description = "Materialize Git branches from declarative repository specs"
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.0",

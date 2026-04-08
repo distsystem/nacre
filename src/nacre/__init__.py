@@ -1,1 +1,1 @@
-"""Nacre — declarative Git branch materializer."""
+"""Nacre — declarative Git repository branch graph materializer."""

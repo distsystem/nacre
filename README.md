@@ -1,6 +1,6 @@
 # nacre
 
-Materialize a Git branch from a declarative YAML config.
+Materialize declared Git branches from a declarative repository spec.
 
 ## Usage
 
@@ -13,19 +13,35 @@ nacre
 Fields can be overridden via CLI args or env vars (`NACRE_` prefix):
 
 ```bash
-nacre --target staging
-NACRE_TARGET=staging nacre
+nacre --checkout staging
+NACRE_CHECKOUT=staging nacre
 ```
 
 ## Config
 
 ```yaml
-upstream: jupyter-server/jupyverse:main
-target: dev
-dir: ../python/jupyverse/jupyverse
-layers:
-  - my-fork/jupyverse:fix/federated-extensions-symlink
-  - other-person/jupyverse:some-feature
+repo:
+  dir: ../python/jupyverse/jupyverse
+  remotes:
+    upstream:
+      github: jupyter-server/jupyverse
+    my_fork:
+      github: my-fork/jupyverse
+    other:
+      github: other-person/jupyverse
+
+checkout: patch_on_fix
+
+branches:
+  main: upstream:main
+  fix_federated: my_fork:fix/federated-extensions-symlink@main
+  some_feature: other:some-feature@main
+  patch_on_fix: my_fork:patch-on-fix@fix_federated
 ```
 
-Each ref uses the `owner/repo:branch` format. Remotes are added and fetched automatically. Layers are cherry-picked in order onto a temporary worktree created from `upstream`.
+Each branch expression has one of two forms:
+
+- `remote:branch`: mirror a remote branch into a local branch of the same declared name
+- `remote:branch@base`: mirror the remote branch, then rebase it onto another declared branch
+
+All declared remotes are added and fetched automatically before the declared branches are materialized, then `nacre` checks out the branch named by `checkout`.

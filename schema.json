@@ -1,48 +1,112 @@
 {
+  "$defs": {
+    "RemoteSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "github": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "GitHub repository in 'owner/repo' format",
+          "examples": [
+            "jupyter-server/jupyverse"
+          ],
+          "title": "Github"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Clone URL for the remote repository",
+          "examples": [
+            "https://github.com/jupyter-server/jupyverse.git"
+          ],
+          "title": "Url"
+        }
+      },
+      "title": "RemoteSpec",
+      "type": "object"
+    },
+    "RepoSpec": {
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "default": ".",
+          "description": "Local repository directory managed by nacre. The repository is cloned automatically if it does not exist.",
+          "format": "path",
+          "title": "Dir",
+          "type": "string"
+        },
+        "remotes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RemoteSpec"
+          },
+          "description": "Named Git remotes used as the source of truth for declared branches. Every nacre run fetches these remotes before rebuilding declared branches.",
+          "examples": [
+            {
+              "my_fork": {
+                "github": "my-fork/jupyverse"
+              },
+              "upstream": {
+                "github": "jupyter-server/jupyverse"
+              }
+            }
+          ],
+          "title": "Remotes",
+          "type": "object"
+        }
+      },
+      "required": [
+        "remotes"
+      ],
+      "title": "RepoSpec",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "properties": {
-    "upstream": {
-      "description": "Upstream repository and branch in 'owner/repo:branch' format",
-      "examples": [
-        "jupyter-server/jupyverse:main"
-      ],
-      "pattern": "^[^/:]+/[^/:]+:.+$",
-      "title": "Upstream",
-      "type": "string"
+    "repo": {
+      "$ref": "#/$defs/RepoSpec"
     },
-    "target": {
-      "description": "Name of the target branch to materialize",
+    "checkout": {
+      "description": "Declared branch name to check out after all declared branches have been refreshed from their remote sources.",
       "examples": [
         "dev"
       ],
-      "title": "Target",
+      "title": "Checkout",
       "type": "string"
     },
-    "dir": {
-      "default": ".",
-      "description": "Local repository directory (cloned automatically if absent)",
-      "format": "path",
-      "title": "Dir",
-      "type": "string"
-    },
-    "layers": {
-      "description": "Layers to cherry-pick, each as 'owner/repo:branch' or 'base..owner/repo:branch'",
-      "examples": [
-        [
-          "my-fork/repo:fix-bug",
-          "other/repo:main..other/repo:feature"
-        ]
-      ],
-      "items": {
+    "branches": {
+      "additionalProperties": {
         "type": "string"
       },
-      "title": "Layers",
-      "type": "array"
+      "description": "Managed branch declarations. Each value must be 'remote:branch' or 'remote:branch@base'. On every run, nacre resets each declared branch to its remote source and optionally rebases it onto the declared base. Remote branches are the source of truth: push local work before re-running nacre if you want to keep it. Use undeclared local branches for temporary scratch work.",
+      "examples": [
+        {
+          "feature": "my_fork:feature@main",
+          "main": "upstream:main"
+        }
+      ],
+      "title": "Branches",
+      "type": "object"
     }
   },
   "required": [
-    "upstream",
-    "target"
+    "repo",
+    "checkout",
+    "branches"
   ],
   "title": "NacreSettings",
   "type": "object"

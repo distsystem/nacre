@@ -1,4 +1,4 @@
-"""CLI for declarative branch materialization."""
+"""CLI for declarative repository branch materialization."""
 
 import pathlib
 import sys
@@ -6,7 +6,7 @@ import sys
 import pydantic
 
 import nacre.config as config_module
-import nacre.materialize as materialize_module
+import nacre.repository as repository_module
 
 YAML_FILE = "nacre.yaml"
 
@@ -25,7 +25,7 @@ def main() -> int:
         else:
             print(f"nacre: {exc}", file=sys.stderr)
         return 1
-    materialize_module.materialize_branch(settings)
+    repository_module.materialize_repository(settings)
     return 0
 
 
